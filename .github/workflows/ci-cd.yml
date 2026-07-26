@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: ci/cd pipeline
 
 on:
   push:
@@ -9,43 +9,45 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del código
+      - name: checkout del código
         uses: actions/checkout@v3
 
-      - name: Configurar Node.js
+      - name: configurar node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Instalar dependencias
+      - name: instalar dependencias
         run: npm ci
 
-      - name: Ejecutar pruebas
+      - name: ejecutar pruebas
         run: npm test
 
   build-push:
-    needs: build-test # Fail-fast: solo se ejecuta si build-test es exitoso
+    needs: build-test # fail-fast: solo se ejecuta si build-test es exitoso
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # Necesario para publicar en ghcr.io
+      packages: write # necesario para publicar en ghcr.io
 
     steps:
-      - name: Checkout del código
+      - name: checkout del código
         uses: actions/checkout@v3
 
-      - name: Login en GitHub Container Registry
+      - name: login en github container registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Construir y publicar imagen Docker
+      - name: construir y publicar imagen docker
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/<raet0>/inventario-app:${{ github.sha }}
-            ghcr.io/<raet0>/inventario-app:latest
+            ghcr.io/raet0/inventario-app:${{ github.sha }}
+            ghcr.io/raet0/inventario-app:latest
+
+  
