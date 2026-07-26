@@ -1,4 +1,4 @@
-name: ci/cd pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -9,39 +9,50 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - name: checkout del código
+      - name: Checkout del código
         uses: actions/checkout@v3
 
-      - name: configurar node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: instalar dependencias
+      - name: Instalar dependencias
         run: npm ci
 
-      - name: ejecutar pruebas
+      - name: Ejecutar pruebas
         run: npm test
 
   build-push:
-    needs: build-test # fail-fast: solo se ejecuta si build-test es exitoso
+    needs: build-test # principle fail-fast
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # necesario para publicar en ghcr.io
+      packages: write # Permisos para publicar en ghcr.io
 
     steps:
-      - name: checkout del código
+      - name: Checkout del código
         uses: actions/checkout@v3
 
-      - name: login en github container registry
+      - name: Login en GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: construir y publicar imagen docker
+      # --- COMPONENTE 2: ESCANEO DE SEGURIDAD CON TRIVY ---
+      - name: Escaneo de vulnerabilidades con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/raet0/inventario-app:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1' # Falla el pipeline si encuentra vulnerabilidades de severidad CRITICAL
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+
+      - name: Construir y publicar imagen Docker
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -49,5 +60,3 @@ jobs:
           tags: |
             ghcr.io/raet0/inventario-app:${{ github.sha }}
             ghcr.io/raet0/inventario-app:latest
-
-  

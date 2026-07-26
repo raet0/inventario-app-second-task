@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventario-app-green
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventario
+      version: green # Etiqueta clave
+  template:
+    metadata:
+      labels:
+        app: inventario
+        version: green
+    spec:
+      containers:
+      - name: inventario-container
+        image: ghcr.io/raet0/inventario-app:latest # Tu nueva imagen
+        ports:
+        - containerPort: 3000
