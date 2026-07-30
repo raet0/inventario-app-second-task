@@ -14,6 +14,7 @@ RUN npm test
 
 # --- Etapa 2: Imagen final ligera ---
 FROM node:18-alpine
+RUN apk upgrade --no-cache
 WORKDIR /app
 
 # Copiamos dependencias y configuraciones
