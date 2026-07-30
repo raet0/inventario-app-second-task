@@ -6,6 +6,9 @@ const db = require('./db');
 const APP_VERSION = process.env.APP_VERSION || 'v1';
 const APP_COLOR = process.env.APP_COLOR || 'blue';
 const SIMULATE_FAILURE = process.env.SIMULATE_FAILURE === 'true';
+const STARTUP_DELAY = parseInt(process.env.STARTUP_DELAY_SECONDS || '0', 10);
+const startTime = Date.now();
+
 
 function createApp() {
   const app = express();
@@ -13,6 +16,14 @@ function createApp() {
   app.use(express.static(path.join(__dirname, 'public')));
 
   app.get('/health', (req, res) => {
+    const uptimeSeconds = (Date.now() - startTime) / 1000;
+    if (uptimeSeconds < STARTUP_DELAY) {
+      return res.status(503).json({ 
+        status: 'error', 
+        reason: `Arrancando... faltan ${Math.round(STARTUP_DELAY - uptimeSeconds)}s` 
+      });
+    }
+
     if (SIMULATE_FAILURE || !db.canAccessDb()) {
       return res.status(500).json({ status: 'error', reason: 'fallo simulado o base de datos no accesible' });
     }
