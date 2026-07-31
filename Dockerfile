@@ -19,7 +19,10 @@ WORKDIR /app
 
 # Copiamos dependencias y configuraciones
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
+
+# Actualizamos npm global para parchear la vulnerabilidad de 'tar' interna de npm
+RUN npm install -g npm@latest
 
 # ¡AQUÍ ESTABA EL ERROR 2! Copiamos los archivos sueltos porque no tienes carpeta "src"
 COPY --from=builder /app/server.js ./
@@ -28,5 +31,5 @@ COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
-# Comandos para iniciar la aplicación
-CMD ["npm", "start"]
+# Comandos para iniciar la aplicación (mejor práctica: usar node directamente)
+CMD ["node", "server.js"]
