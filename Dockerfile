@@ -1,5 +1,5 @@
 # --- Etapa 1: Construcción y Pruebas (builder) ---
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copiamos solo los archivos de dependencias primero para aprovechar la caché de Docker
@@ -13,7 +13,7 @@ COPY . .
 RUN npm test
 
 # --- Etapa 2: Imagen final ligera ---
-FROM node:18-alpine
+FROM node:20-alpine
 RUN apk upgrade --no-cache
 WORKDIR /app
 
