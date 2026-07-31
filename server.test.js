@@ -15,7 +15,7 @@ function startServer(app) {
   });
 }
 
-function request(server, method, urlPath, body) {
+function request(server, method, urlPath, body, headers = {}) {
   const { port } = server.address();
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
@@ -25,7 +25,12 @@ function request(server, method, urlPath, body) {
         port,
         path: urlPath,
         method,
-        headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {},
+        headers: {
+          ...headers,
+          ...(data
+            ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
+            : {}),
+        },
       },
       (res) => {
         let raw = '';
@@ -63,6 +68,27 @@ test('GET /version responde con version y color', async () => {
   assert.ok(res.body.version);
   assert.ok(res.body.color);
   server.close();
+});
+
+test('GET /api/admin/check usa API_KEY y protege la ruta', async () => {
+  const previousApiKey = process.env.API_KEY;
+  process.env.API_KEY = 'clave-de-prueba';
+
+  const app = createApp();
+  const server = await startServer(app);
+
+  const unauthorized = await request(server, 'GET', '/api/admin/check');
+  assert.strictEqual(unauthorized.status, 401);
+
+  const authorized = await request(server, 'GET', '/api/admin/check', null, {
+    'x-api-key': 'clave-de-prueba',
+  });
+  assert.strictEqual(authorized.status, 200);
+  assert.strictEqual(authorized.body.status, 'autorizado');
+
+  server.close();
+  if (previousApiKey === undefined) delete process.env.API_KEY;
+  else process.env.API_KEY = previousApiKey;
 });
 
 test('POST /api/products crea un producto y GET /api/products lo lista', async () => {

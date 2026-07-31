@@ -15,6 +15,20 @@ function createApp() {
   app.use(express.json());
   app.use(express.static(path.join(__dirname, 'public')));
 
+  function requireApiKey(req, res, next) {
+    const apiKey = process.env.API_KEY;
+
+    if (!apiKey) {
+      return res.status(503).json({ error: 'API_KEY no configurada' });
+    }
+
+    if (req.get('x-api-key') !== apiKey) {
+      return res.status(401).json({ error: 'API key invalida' });
+    }
+
+    next();
+  }
+
   app.get('/health', (req, res) => {
     const uptimeSeconds = (Date.now() - startTime) / 1000;
     if (uptimeSeconds < STARTUP_DELAY) {
@@ -36,6 +50,10 @@ function createApp() {
       color: APP_COLOR,
       hostname: os.hostname(),
     });
+  });
+
+  app.get('/api/admin/check', requireApiKey, (req, res) => {
+    res.status(200).json({ status: 'autorizado' });
   });
 
   app.get('/api/products', (req, res) => {

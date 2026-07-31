@@ -79,8 +79,16 @@ minikube start
 ```
 Antes de cualquier despliegue, inyectaremos de forma segura nuestras credenciales (**Componente 1**):
 ```bash
-kubectl create secret generic api-secret --from-literal=API_KEY=mi_super_secreto
+read -s API_KEY_VALUE
+kubectl create secret generic api-secret \
+  --from-literal=API_KEY="$API_KEY_VALUE" \
+  --dry-run=client -o yaml | kubectl apply -f -
+unset API_KEY_VALUE
 ```
+
+El valor no se escribe en los manifiestos ni se guarda en Git. Los Deployments
+referencian `api-secret` mediante `secretKeyRef` y Kubernetes lo inyecta como la
+variable de entorno `API_KEY`.
 
 ### Paso 5: Despliegue Base y Prueba de Arranque Lento
 Vamos a desplegar la versión base. Aquí demostraremos el **Componente 3 (Arranque Lento)**:
@@ -95,6 +103,21 @@ Una vez que estén listos, expón el servicio y ábrelo en tu navegador:
 ```bash
 minikube service inventario-service
 ```
+
+Para demostrar que la aplicación consume el Secret, abre primero el servicio con
+`minikube service inventario-service --url` y utiliza la URL obtenida:
+
+```bash
+SERVICE_URL="$(minikube service inventario-service --url)"
+curl -i "$SERVICE_URL/api/admin/check"
+
+API_KEY_VALUE="$(kubectl get secret api-secret -o jsonpath='{.data.API_KEY}' | base64 --decode)"
+curl -i "$SERVICE_URL/api/admin/check" -H "x-api-key: $API_KEY_VALUE"
+unset API_KEY_VALUE SERVICE_URL
+```
+
+La primera petición debe responder `401 Unauthorized`; la segunda, `200 OK`.
+
 *En el navegador, crea un producto. Luego, elimina el pod: `kubectl delete pod <nombre-del-pod>`. Cuando Kubernetes lo levante de nuevo automáticamente y refresques la página, verás que **el producto desapareció**. Esto demuestra el problema de usar almacenamiento efímero local en contenedores.*
 
 ### Paso 6: Demostración Estrella: Despliegue Blue-Green
