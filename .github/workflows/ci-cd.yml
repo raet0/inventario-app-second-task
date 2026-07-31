@@ -1,5 +1,8 @@
 name: CI/CD Pipeline
 
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/inventario-app
+
 on:
   push:
     branches:
@@ -8,14 +11,16 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
+          cache: npm
 
       - name: Instalar dependencias
         run: npm ci
@@ -24,70 +29,43 @@ jobs:
         run: npm test
 
   build-push:
-    needs: build-test # principle fail-fast
+    needs: build-test
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
-      packages: write # Permisos para publicar en ghcr.io
+      packages: write
 
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
+      # Primero construimos la imagen localmente.
+      - name: Construir imagen Docker para escaneo
+        run: docker build --tag "${IMAGE_NAME}:${GITHUB_SHA}" .
+
+      # Después escaneamos exactamente la imagen construida.
+      - name: Escaneo de vulnerabilidades con Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: CRITICAL
+
+      # Solo inicia sesión si las pruebas y Trivy pasaron.
       - name: Login en GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # CÓDIGO ANTERIOR CON ERROR (Comentado para demostración):
-      # # --- COMPONENTE 2: ESCANEO DE SEGURIDAD CON TRIVY ---
-      # - name: Escaneo de vulnerabilidades con Trivy
-      #   uses: aquasecurity/trivy-action@master
-      #   with:
-      #     image-ref: 'ghcr.io/raet0/inventario-app:${{ github.sha }}'
-      #     format: 'table'
-      #     exit-code: '1' # Falla el pipeline si encuentra vulnerabilidades de severidad CRITICAL
-      #     ignore-unfixed: true
-      #     vuln-type: 'os,library'
-      #     severity: 'CRITICAL'
-      #
-      # - name: Construir y publicar imagen Docker
-      #   uses: docker/build-push-action@v4
-      #   with:
-      #     context: .
-      #     push: true
-      #     tags: |
-      #       ghcr.io/raet0/inventario-app:${{ github.sha }}
-      #       ghcr.io/raet0/inventario-app:latest
-
-      # Codigo que permite pasar la prueba:
-      # 1. Construir la imagen pero dejarla en el Docker local (load: true)
-      - name: Construir imagen Docker localmente
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          load: true # <-- Esto es clave: carga la imagen localmente en vez de subirla
-          tags: ghcr.io/raet0/inventario-app:${{ github.sha }}
-
-      # 2. COMPONENTE 2: Escanear la imagen que acabamos de construir localmente
-      - name: Escaneo de vulnerabilidades con Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/raet0/inventario-app:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1' # Falla el pipeline si encuentra vulnerabilidades de severidad CRITICAL
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL'
-
-      # 3. Si Trivy pasó con éxito, ahora sí la subimos al registro (push: true)
+      # Publicamos la misma imagen con dos etiquetas.
       - name: Publicar imagen Docker
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/raet0/inventario-app:${{ github.sha }}
-            ghcr.io/raet0/inventario-app:latest
+        run: |
+          docker push "${IMAGE_NAME}:${GITHUB_SHA}"
+          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"

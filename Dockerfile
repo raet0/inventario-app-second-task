@@ -1,35 +1,42 @@
-# --- Etapa 1: Construcción y Pruebas (builder) ---
-FROM node:20-alpine AS builder
+# Etapa 1: instalar dependencias y ejecutar pruebas
+FROM node:24-alpine AS builder
+
 WORKDIR /app
 
-# Copiamos solo los archivos de dependencias primero para aprovechar la caché de Docker
-COPY package*.json ./
+COPY package.json package-lock.json ./
+
 RUN npm ci
 
-# ¡AQUÍ ESTABA EL ERROR 1! Faltaba esta línea para copiar el resto del código
-COPY . .
+COPY server.js db.js server.test.js ./
+COPY public ./public
 
-# Ejecutar las pruebas
 RUN npm test
 
-# --- Etapa 2: Imagen final ligera ---
-FROM node:20-alpine
-RUN apk upgrade --no-cache
+
+# Etapa 2: imagen final de producción
+FROM node:24-alpine
+
+ENV NODE_ENV=production
+
 WORKDIR /app
 
-# Copiamos dependencias y configuraciones
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json package-lock.json ./
 
-# Actualizamos npm global para parchear la vulnerabilidad de 'tar' interna de npm
-RUN npm install -g npm@latest
+RUN npm ci --omit=dev \
+    && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm \
+               /usr/local/bin/npm \
+               /usr/local/bin/npx
 
-# ¡AQUÍ ESTABA EL ERROR 2! Copiamos los archivos sueltos porque no tienes carpeta "src"
-COPY --from=builder /app/server.js ./
-COPY --from=builder /app/db.js ./
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/db.js ./db.js
 COPY --from=builder /app/public ./public
+
+RUN mkdir -p /app/data \
+    && chown -R node:node /app
+
+USER node
 
 EXPOSE 3000
 
-# Comandos para iniciar la aplicación (mejor práctica: usar node directamente)
 CMD ["node", "server.js"]
