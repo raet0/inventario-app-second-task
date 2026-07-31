@@ -3,25 +3,30 @@ const path = require('path');
 const os = require('os');
 const db = require('./db');
 
+// Configuración que Kubernetes puede inyectar desde los Deployments.
+// Los valores predeterminados también permiten ejecutar la app fuera del clúster.
 const APP_VERSION = process.env.APP_VERSION || 'v1';
 const APP_COLOR = process.env.APP_COLOR || 'blue';
 const SIMULATE_FAILURE = process.env.SIMULATE_FAILURE === 'true';
 const STARTUP_DELAY = parseInt(process.env.STARTUP_DELAY_SECONDS || '0', 10);
 const startTime = Date.now();
 
-
 function createApp() {
   const app = express();
   app.use(express.json());
   app.use(express.static(path.join(__dirname, 'public')));
 
+  // Protege rutas administrativas mediante la variable API_KEY.
+  // Kubernetes la obtiene de api-secret usando secretKeyRef; su valor no vive en Git.
   function requireApiKey(req, res, next) {
     const apiKey = process.env.API_KEY;
 
+    // 503 indica un problema de configuración del servidor, no del cliente.
     if (!apiKey) {
       return res.status(503).json({ error: 'API_KEY no configurada' });
     }
 
+    // El cliente debe enviar la clave en el encabezado HTTP x-api-key.
     if (req.get('x-api-key') !== apiKey) {
       return res.status(401).json({ error: 'API key invalida' });
     }
@@ -29,8 +34,11 @@ function createApp() {
     next();
   }
 
+  // Kubernetes consulta esta ruta desde readinessProbe y livenessProbe.
   app.get('/health', (req, res) => {
     const uptimeSeconds = (Date.now() - startTime) / 1000;
+
+    // Simula un arranque lento para demostrar que el Pod aún no está listo.
     if (uptimeSeconds < STARTUP_DELAY) {
       return res.status(503).json({ 
         status: 'error', 
@@ -44,6 +52,7 @@ function createApp() {
     res.status(200).json({ status: 'ok' });
   });
 
+  // Permite identificar qué versión, color y Pod atendieron la petición.
   app.get('/version', (req, res) => {
     res.status(200).json({
       version: APP_VERSION,
@@ -52,10 +61,12 @@ function createApp() {
     });
   });
 
+  // Ruta de demostración: solo responde 200 cuando el Secret es correcto.
   app.get('/api/admin/check', requireApiKey, (req, res) => {
     res.status(200).json({ status: 'autorizado' });
   });
 
+  // API REST del inventario.
   app.get('/api/products', (req, res) => {
     res.status(200).json(db.getAll());
   });
@@ -90,6 +101,8 @@ function createApp() {
   return app;
 }
 
+// Inicia el servidor solamente al ejecutar `node server.js`.
+// Durante las pruebas se importa createApp() sin abrir este puerto fijo.
 if (require.main === module) {
   const app = createApp();
   const PORT = process.env.PORT || 3000;
@@ -98,4 +111,5 @@ if (require.main === module) {
   });
 }
 
+// Exportar la fábrica facilita crear una instancia aislada en cada prueba.
 module.exports = { createApp };
