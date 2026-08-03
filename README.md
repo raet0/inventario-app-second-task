@@ -15,27 +15,27 @@ Para asegurar que nuestra aplicación se despliega de manera confiable, implemen
 Automatizamos nuestro flujo de trabajo mediante un pipeline en `.github/workflows/ci-cd.yml` basado en el principio **fail-fast**:
 - **Job `build-test`:** Se encarga de verificar el código ejecutando las pruebas.
 - **Job `build-push`:** Solo se ejecuta si las pruebas son exitosas.
-- ** Escaneo de Seguridad (Componente Adicional 2):** Antes de publicar, utilizamos **Trivy** para escanear la imagen Docker. Si se detectan vulnerabilidades de infraestructura o librerías con severidad `CRITICAL`, el pipeline falla automáticamente.
+- **Escaneo de Seguridad (Componente Adicional 2):** Antes de publicar, utilizamos **Trivy** para escanear la imagen Docker. Si se detectan vulnerabilidades de infraestructura o librerías con severidad `CRITICAL`, el pipeline falla automáticamente.
 - **Publicación:** Finalmente, la imagen es etiquetada (con el hash del commit y la etiqueta `latest`) y subida al GitHub Container Registry (`ghcr.io`).
 
-##  3. Despliegue en Kubernetes (Rolling Update)
+## 3. Despliegue en Kubernetes (Rolling Update)
 Desplegamos nuestra aplicación en un clúster de Kubernetes garantizando alta disponibilidad:
 - Configuramos un `Deployment` base con 2 réplicas y una estrategia **RollingUpdate** (`maxUnavailable: 1`, `maxSurge: 1`), permitiendo actualizaciones graduales sin tiempo de inactividad para el usuario.
-- **️ Manejo de Secretos (Componente Adicional 1):** Protegimos nuestras credenciales (ej. `API_KEY`) utilizando un Secret de Kubernetes inyectado a través de `secretKeyRef` como variable de entorno, evitando por completo que datos sensibles terminen en el código fuente versionado.
-- ** Readiness y Arranque Lento (Componente Adicional 3):** Simulamos el comportamiento de una aplicación pesada (por ejemplo, una que demora en conectar a una base de datos) introduciendo un retardo en el arranque mediante la variable de entorno `STARTUP_DELAY_SECONDS="30"`. Ajustamos nuestra `readinessProbe` (aumentando su `failureThreshold`) para que Kubernetes tolere esta demora sin matar el Pod prematuramente, mientras que la `livenessProbe` asegura el monitoreo continuo de su estado de salud.
+- **Manejo de Secretos (Componente Adicional 1):** Protegimos nuestras credenciales (ej. `API_KEY`) utilizando un Secret de Kubernetes inyectado a través de `secretKeyRef` como variable de entorno, evitando por completo que datos sensibles terminen en el código fuente versionado.
+- **Readiness y Arranque Lento (Componente Adicional 3):** Simulamos el comportamiento de una aplicación pesada (por ejemplo, una que demora en conectar a una base de datos) introduciendo un retardo en el arranque mediante la variable de entorno `STARTUP_DELAY_SECONDS="30"`. Ajustamos nuestra `readinessProbe` (aumentando su `failureThreshold`) para que Kubernetes tolere esta demora sin matar el Pod prematuramente, mientras que la `livenessProbe` asegura el monitoreo continuo de su estado de salud.
 
-##  4. Estrategia de Despliegue Avanzado: Blue-Green
+## 4. Estrategia de Despliegue Avanzado: Blue-Green
 Para minimizar al máximo los riesgos al lanzar nuevas versiones frente a usuarios reales, implementamos una estrategia de despliegue **Blue-Green** utilizando los recursos nativos de Kubernetes.
 - **Implementación:** Creamos dos Deployments independientes (Blue y Green) en el directorio `k8s/blue-green/`. Cada uno representa una versión o configuración diferente.
 - **Corte de Tráfico Instantáneo:** Un único Service actúa como enrutador del tráfico. Al cambiar el `selector` de dicho Service (por ejemplo, de `color: blue` a `color: green`), logramos desviar el 100% del tráfico de los usuarios a la nueva versión de manera **instantánea**, facilitando un rollback inmediato si algo sale mal.
 
-##  5. Reflexión sobre la Persistencia de Datos
+## 5. Reflexión sobre la Persistencia de Datos
 Un hallazgo clave durante nuestro desarrollo y despliegue inicial fue observar qué ocurre al eliminar o recrear un Pod. Dado que nuestra aplicación almacena su catálogo en un archivo JSON local (`data/products.json`) directamente dentro del contenedor, **los datos y cambios generados se pierden permanentemente cada vez que se recrea el Pod**.
 Esto evidencia y refuerza la necesidad en la vida real de utilizar bases de datos externas o la integración de Volúmenes Persistentes (Persistent Volumes) en Kubernetes para persistir el estado.
 
 ---
 
-## ️ Tutorial Paso a Paso: Levantando el Entorno desde Cero
+## Tutorial Paso a Paso: Levantando el Entorno desde Cero
 
 Esta sección está diseñada como una guía práctica para demostrar el funcionamiento de todo nuestro ecosistema, ideal para presentaciones en vivo.
 
